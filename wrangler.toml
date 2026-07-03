@@ -14,3 +14,18 @@ workers_dev = true
 # [[routes]]
 # pattern = "your-domain.com/*"
 # zone_name = "your-domain.com"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = false
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 1
