@@ -2,7 +2,7 @@
 
 基于 Pexels API 的在线图片画廊，支持搜索、预览、下载及复制链接，部署在 Cloudflare Workers。
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/你的用户名/你的仓库名)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Jack-Liang/Pexels)
 
 ## 功能
 

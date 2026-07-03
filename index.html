@@ -601,7 +601,7 @@
     </div>
 
     <script>
-        // API Key 由 Cloudflare Worker 代理注入，前端不再暴露
+        // API Key 通过 Cloudflare Worker 环境变量配置，前端始终通过 /api/pexels 代理请求
 
         // DOM元素
         const gridBox = document.getElementById("gridBox");
@@ -747,52 +747,25 @@
             const currentRatio = getCurrentRatio();
             const randomPage = Math.floor(Math.random() * 30) + 1;
 
-            // 判断是否在 Cloudflare Worker 环境（生产环境）
-            const isWorker = window.location.hostname.endsWith('.workers.dev') ||
-                             window.location.hostname.includes('cloudflare');
-
             try {
-                let data;
+                // 始终通过 Worker 代理请求，API Key 由服务端注入
+                const proxyUrl = new URL("/api/pexels", window.location.origin);
+                proxyUrl.searchParams.set("query", query);
+                proxyUrl.searchParams.set("orientation", orientation);
+                proxyUrl.searchParams.set("size", size);
+                proxyUrl.searchParams.set("per_page", perPage);
+                proxyUrl.searchParams.set("page", randomPage);
+                const res = await fetch(proxyUrl);
 
-                if (isWorker) {
-                    // 生产环境：通过 Worker 代理
-                    const proxyUrl = new URL("/api/pexels", window.location.origin);
-                    proxyUrl.searchParams.set("query", query);
-                    proxyUrl.searchParams.set("orientation", orientation);
-                    proxyUrl.searchParams.set("size", size);
-                    proxyUrl.searchParams.set("per_page", perPage);
-                    proxyUrl.searchParams.set("page", randomPage);
-                    const res = await fetch(proxyUrl);
-                    if (!res.ok) throw new Error("接口请求失败，请检查 API Key 配置");
-                    data = await res.json();
-                } else {
-                    // 本地/其他环境：直连 Pexels API
-                    let devKey = localStorage.getItem('pexels_dev_key');
-                    if (!devKey) {
-                        // 首次使用，弹出输入框
-                        devKey = prompt('请输入你的 Pexels API Key（仅保存在浏览器本地）：');
-                        if (devKey && devKey.trim()) {
-                            localStorage.setItem('pexels_dev_key', devKey.trim());
-                        } else {
-                            throw new Error('未配置 API Key');
-                        }
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => null);
+                    if (errData?.error?.includes('PEXELS_API_KEY')) {
+                        throw new Error('服务端未配置 API Key，请在 Cloudflare Dashboard → Workers → Settings → Variables and Secrets 中添加 PEXELS_API_KEY');
                     }
-                    const pexelsUrl = new URL('https://api.pexels.com/v1/search');
-                    pexelsUrl.searchParams.set('query', query);
-                    pexelsUrl.searchParams.set('orientation', orientation);
-                    pexelsUrl.searchParams.set('size', size);
-                    pexelsUrl.searchParams.set('per_page', perPage);
-                    pexelsUrl.searchParams.set('page', randomPage);
-                    const res = await fetch(pexelsUrl, {
-                        headers: { Authorization: devKey }
-                    });
-                    if (!res.ok) {
-                        // Key 无效，清除缓存并提示重新输入
-                        localStorage.removeItem('pexels_dev_key');
-                        throw new Error('API Key 无效，请刷新后重新输入');
-                    }
-                    data = await res.json();
+                    throw new Error('接口请求失败，请稍后重试');
                 }
+
+                const data = await res.json();
                 const photos = data.photos;
 
                 gridBox.innerHTML = "";
