@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pexels画廊</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #121212;
+            color: #fff;
+            padding: 40px 20px;
+            font-family: system-ui, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: left;
+            margin: 0 0 16px 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #e0e0e0;
+            letter-spacing: 1px;
+        }
+        /* 配置面板 */
+        .config-panel {
+            background: #1f1f1f;
+            padding: 24px 28px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 20px;
+            justify-content: center;
+        }
+        .form-item label {
+            display: block;
+            margin-bottom: 8px;
+            color: #ccc;
+            text-align: center;
+        }
+        .form-item input,
+        .form-item select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 15px;
+            background: #333;
+            color: #fff;
+        }
+        #refreshBtn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            background: #0ea5e9;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            align-self: end;
+            height: 42px;
+        }
+        #refreshBtn:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        #refreshBtn:hover:not(:disabled) {
+            background: #0284c7;
+        }
+        /* 九宫格 */
+        .grid-wrap {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .grid-item {
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            background: #222;
+            transition: transform 0.25s ease;
+        }
+        .grid-item:hover {
+            transform: scale(1.03);
+        }
+        .grid-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .loading-tip {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 0;
+            font-size: 18px;
+            color: #aaa;
+        }
+        /* 错误提示卡片 */
+        .error-card {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 52px 24px;
+            background: #1a1a1a;
+            border-radius: 12px;
+            border: 1px solid #2a2a2a;
+        }
+        .error-card .error-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(248, 113, 113, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #f87171;
+            font-size: 22px;
+        }
+        .error-card .error-title {
+            font-size: 16px;
+            color: #eee;
+            font-weight: 500;
+        }
+        .error-card .error-desc {
+            font-size: 13px;
+            color: #777;
+            line-height: 1.6;
+            max-width: 320px;
+        }
+        .error-card .error-retry {
+            margin-top: 4px;
+            padding: 8px 28px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: transparent;
+            color: #ccc;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .error-card .error-retry:hover {
+            background: #2a2a2a;
+            color: #fff;
+        }
+        /* 预览弹窗 */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            display: none;
+            z-index: 999;
+            padding: 30px;
+            overflow-y: auto;
+        }
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* 统一外框容器，大图+信息栏同框 */
+        .modal-card {
+            position: relative;
+            display: flex;
+            gap: 24px;
+            max-width: 1400px;
+            width: 100%;
+            background: #1e1e1e;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.6);
+        }
+        /* 关闭按钮：定位在卡片右上角外侧 */
+        .close-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            color: #fff;
+            font-size: 28px;
+            cursor: pointer;
+            user-select: none;
+            z-index: 1000;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            transition: background 0.2s;
+        }
+        .close-btn:hover {
+            background: rgba(255,255,255,0.25);
+        }
+        .modal-img-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .modal-placeholder {
+            position: absolute;
+            max-width: 100%;
+            max-height: 85vh;
+            border-radius: 8px;
+            z-index: 1;
+            transition: opacity 0.5s ease, filter 0.5s ease;
+        }
+        .modal-placeholder.loading {
+            animation: breathe 1.8s ease-in-out infinite;
+        }
+        .modal-placeholder.fading {
+            opacity: 0;
+            filter: blur(8px);
+        }
+        .modal-img {
+            position: relative;
+            max-width: 100%;
+            max-height: 85vh;
+            border-radius: 8px;
+            z-index: 2;
+            opacity: 0;
+            transform: scale(0.85);
+            transition: opacity 0.9s cubic-bezier(0.25, 0.1, 0.25, 1),
+                        transform 0.9s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+        .modal-img.loaded {
+            opacity: 1;
+            transform: scale(1);
+        }
+        /* 加载指示器 */
+        .loading-spinner {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(255,255,255,0.12);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            z-index: 3;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .loading-spinner.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes breathe {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.65; }
+        }
+        /* 右侧信息面板 */
+        .modal-info {
+            width: 300px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            font-size: 14px;
+            overflow-y: auto;
+            max-height: 85vh;
+            padding-right: 8px;
+            scrollbar-gutter: stable;
+        }
+        /* 美化滚动条 */
+        .modal-info::-webkit-scrollbar {
+            width: 5px;
+        }
+        .modal-info::-webkit-scrollbar-track {
+            background: transparent;
+            margin: 4px 0;
+        }
+        .modal-info::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.12);
+            border-radius: 3px;
+        }
+        .modal-info::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.25);
+        }
+        .info-title {
+            font-size: 20px;
+            font-weight: 600;
+            border-bottom: 1px solid #333;
+            padding-bottom: 12px;
+        }
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .info-label {
+            color: #999;
+            font-size: 12px;
+        }
+        .info-value {
+            color: #eee;
+            line-height: 1.4;
+        }
+        .info-url {
+            word-break: break-all;
+            font-size: 12px;
+            color: #88c8ff;
+        }
+        .info-url a {
+            color: #88c8ff;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .info-url a:hover {
+            color: #b8e0ff;
+            text-decoration: underline;
+        }
+        /* 摄影师卡片 */
+        .photographer-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0 12px;
+            border-bottom: 1px solid #333;
+        }
+        .photographer-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            font-weight: 600;
+            color: #fff;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .photographer-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+        .photographer-name {
+            color: #eee;
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .photographer-name:hover {
+            color: #fff;
+            text-decoration: underline;
+        }
+        .photo-page-link {
+            color: #88c8ff;
+            font-size: 12px;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .photo-page-link:hover {
+            color: #b8e0ff;
+            text-decoration: underline;
+        }
+        .color-block {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            border-radius: 3px;
+            margin-right: 6px;
+        }
+        /* 低调统一灰色下载按钮组 */
+        .download-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .download-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .download-btn {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            background: #333;
+            min-width: 0;
+        }
+        .download-btn:hover {
+            background: #444;
+            border-color: #666;
+        }
+        .copy-link-btn {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #aaa;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            background: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+        .copy-link-btn:hover {
+            background: #444;
+            border-color: #666;
+            color: #fff;
+        }
+        .copy-link-btn.copied {
+            background: #0ea5e9;
+            border-color: #0ea5e9;
+            color: #fff;
+        }
+        /* Footer */
+        .site-footer {
+            margin-top: 48px;
+            padding: 28px 0 20px;
+            text-align: center;
+            border-top: 1px solid #2a2a2a;
+            color: #666;
+            font-size: 13px;
+        }
+        .site-footer a {
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .site-footer a:hover {
+            color: #ccc;
+        }
+        .site-footer .divider {
+            margin: 0 8px;
+            color: #3a3a3a;
+        }
+        /* 移动端适配 */
+        @media (max-width: 900px) {
+            .modal-card {
+                flex-direction: column;
+            }
+            .modal-info {
+                width: 100%;
+                max-height: unset;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pexels 画廊</h1>
+
+        <!-- 自定义配置面板 -->
+        <div class="config-panel">
+            <div class="form-item">
+                <label>搜索关键词</label>
+                <input type="text" id="queryInput" value="" placeholder="输入英文关键词搜索">
+            </div>
+            <div class="form-item">
+                <label>图片方向</label>
+                <select id="orientationSel">
+                    <option value="landscape">横向矩形 16:9</option>
+                    <option value="portrait">竖向 9:16</option>
+                    <option value="square">正方形 1:1</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <label>缩略图尺寸</label>
+                <select id="sizeSel">
+                    <option value="small">small 小图</option>
+                    <option value="medium" selected>medium 中等</option>
+                    <option value="large">large 大图</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <label>加载数量</label>
+                <select id="countSel">
+                    <option value="3">3张</option>
+                    <option value="6">6张</option>
+                    <option value="9" selected>9张（九宫格）</option>
+                    <option value="12">12张</option>
+                </select>
+            </div>
+            <button id="refreshBtn">刷新图片</button>
+        </div>
+
+        <div class="grid-wrap" id="gridBox"></div>
+
+        <footer class="site-footer">
+            <span>Powered by <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a></span>
+            <span class="divider">·</span>
+            <span>Pexels 画廊</span>
+        </footer>
+    </div>
+
+    <!-- 大图预览弹窗 -->
+    <div class="modal" id="previewModal">
+        <div class="modal-card">
+            <span class="close-btn" id="closeModal">×</span>
+            <div class="modal-img-box">
+                <!-- 加载指示器 -->
+                <div class="loading-spinner" id="loadingSpinner"></div>
+                <!-- 缩略图占位 -->
+                <img class="modal-placeholder" id="placeholderImg" alt="占位图">
+                <!-- 高清原图 -->
+                <img class="modal-img" id="bigImg" alt="大图预览">
+            </div>
+            <!-- 右侧完整信息面板 -->
+            <div class="modal-info">
+                <div class="info-title">图片完整信息</div>
+                <div class="info-item">
+                    <span class="info-label">图片ID</span>
+                    <span class="info-value" id="photoId">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">原图分辨率</span>
+                    <span class="info-value" id="photoSize">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">平均主色调</span>
+                    <span class="info-value" id="avgColor">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">图片描述</span>
+                    <span class="info-value" id="photoAlt">-</span>
+                </div>
+                <div class="photographer-card">
+                    <div class="photographer-avatar" id="photographerAvatar">P</div>
+                    <div class="photographer-meta">
+                        <a class="photographer-name" id="photographerName" href="#" target="_blank" rel="noopener"></a>
+                        <a class="photo-page-link" id="photoPageLink" href="#" target="_blank" rel="noopener">在 Pexels 查看 →</a>
+                    </div>
+                </div>
+                <!-- 多尺寸下载按钮组 -->
+                <div class="info-item">
+                    <span class="info-label">下载不同尺寸</span>
+                    <div class="download-group">
+                        <div class="download-row">
+                            <button class="download-btn" data-size="original">Original</button>
+                            <button class="copy-link-btn" data-size="original" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                        <div class="download-row">
+                            <button class="download-btn" data-size="large2x">Large2x</button>
+                            <button class="copy-link-btn" data-size="large2x" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                        <div class="download-row">
+                            <button class="download-btn" data-size="large">Large</button>
+                            <button class="copy-link-btn" data-size="large" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                        <div class="download-row">
+                            <button class="download-btn" data-size="medium">Medium</button>
+                            <button class="copy-link-btn" data-size="medium" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                        <div class="download-row">
+                            <button class="download-btn" data-size="small">Small</button>
+                            <button class="copy-link-btn" data-size="small" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                        <div class="download-row">
+                            <button class="download-btn" data-size="tiny">Tiny</button>
+                            <button class="copy-link-btn" data-size="tiny" title="复制链接">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Key 由 Cloudflare Worker 代理注入，前端不再暴露
+
+        // DOM元素
+        const gridBox = document.getElementById("gridBox");
+        const refreshBtn = document.getElementById("refreshBtn");
+        const previewModal = document.getElementById("previewModal");
+        const bigImg = document.getElementById("bigImg");
+        const placeholderImg = document.getElementById("placeholderImg");
+        const closeModal = document.getElementById("closeModal");
+        const loadingSpinner = document.getElementById("loadingSpinner");
+        // 信息面板DOM
+        const photoId = document.getElementById("photoId");
+        const photoSize = document.getElementById("photoSize");
+        const avgColor = document.getElementById("avgColor");
+        const photoAlt = document.getElementById("photoAlt");
+        const photographerAvatar = document.getElementById("photographerAvatar");
+        const photographerName = document.getElementById("photographerName");
+        const photoPageLink = document.getElementById("photoPageLink");
+        const downloadBtns = document.querySelectorAll(".download-btn");
+
+        // 配置项
+        const queryInput = document.getElementById("queryInput");
+        const orientationSel = document.getElementById("orientationSel");
+        const sizeSel = document.getElementById("sizeSel");
+        const countSel = document.getElementById("countSel");
+
+        // 全局缓存当前打开图片数据
+        let currentPhotoData = null;
+
+        // 关闭弹窗 重置图片
+        closeModal.addEventListener("click", resetModal);
+        previewModal.addEventListener("click", (e) => {
+            if (e.target === previewModal) resetModal();
+        });
+        function resetModal() {
+            previewModal.classList.remove("show");
+            currentPhotoData = null;
+            bigImg.classList.remove("loaded");
+            bigImg.src = "";
+            placeholderImg.src = "";
+            placeholderImg.style.opacity = 1;
+            placeholderImg.classList.remove("loading", "fading");
+            loadingSpinner.classList.remove("show");
+        }
+
+        // 多尺寸下载统一处理
+        downloadBtns.forEach(btn => {
+            btn.addEventListener("click", async () => {
+                if (!currentPhotoData) return;
+                const sizeKey = btn.dataset.size;
+                const url = currentPhotoData.src[sizeKey];
+                const originalText = btn.textContent;
+                // 禁用所有下载按钮，当前按钮显示下载中
+                downloadBtns.forEach(b => b.disabled = true);
+                btn.textContent = "下载中...";
+                try {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = `pexels_${currentPhotoData.id}_${sizeKey}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(blobUrl);
+                    // 成功反馈
+                    btn.textContent = "已下载";
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        downloadBtns.forEach(b => b.disabled = false);
+                    }, 800);
+                } catch (err) {
+                    btn.textContent = "下载失败";
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        downloadBtns.forEach(b => b.disabled = false);
+                    }, 1200);
+                    // 兜底：新标签页打开
+                    window.open(url, "_blank");
+                }
+            });
+        });
+
+        // 复制图片链接
+        const copyLinkBtns = document.querySelectorAll(".copy-link-btn");
+        copyLinkBtns.forEach(btn => {
+            btn.addEventListener("click", async () => {
+                if (!currentPhotoData) return;
+                const sizeKey = btn.dataset.size;
+                const url = currentPhotoData.src[sizeKey];
+                try {
+                    await navigator.clipboard.writeText(url);
+                    btn.classList.add("copied");
+                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                    setTimeout(() => {
+                        btn.classList.remove("copied");
+                        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+                    }, 1200);
+                } catch (err) {
+                    // 兜底：传统方法复制
+                    const textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.style.position = "fixed";
+                    textarea.style.opacity = "0";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand("copy");
+                    textarea.remove();
+                    btn.classList.add("copied");
+                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                    setTimeout(() => {
+                        btn.classList.remove("copied");
+                        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+                    }, 1200);
+                }
+            });
+        });
+
+        // 根据当前选中值获取宽高比
+        function getCurrentRatio() {
+            const val = orientationSel.value;
+            if(val === "portrait") return "9 / 16";
+            if(val === "square") return "1 / 1";
+            return "16 / 9";
+        }
+
+        // 批量更新所有卡片比例
+        function updateGridRatio() {
+            const ratio = getCurrentRatio();
+            const items = document.querySelectorAll(".grid-item");
+            items.forEach(el => el.style.aspectRatio = ratio);
+        }
+
+        // 请求加载图片
+        async function loadImages() {
+            refreshBtn.disabled = true;
+            gridBox.innerHTML = `<div class="loading-tip">图片加载中...</div>`;
+
+            const query = queryInput.value.trim() || "landscape";
+            const orientation = orientationSel.value;
+            const size = sizeSel.value;
+            const perPage = parseInt(countSel.value);
+            const currentRatio = getCurrentRatio();
+            const randomPage = Math.floor(Math.random() * 30) + 1;
+
+            // 判断是否在 Cloudflare Worker 环境（生产环境）
+            const isWorker = window.location.hostname.endsWith('.workers.dev') ||
+                             window.location.hostname.includes('cloudflare');
+
+            try {
+                let data;
+
+                if (isWorker) {
+                    // 生产环境：通过 Worker 代理
+                    const proxyUrl = new URL("/api/pexels", window.location.origin);
+                    proxyUrl.searchParams.set("query", query);
+                    proxyUrl.searchParams.set("orientation", orientation);
+                    proxyUrl.searchParams.set("size", size);
+                    proxyUrl.searchParams.set("per_page", perPage);
+                    proxyUrl.searchParams.set("page", randomPage);
+                    const res = await fetch(proxyUrl);
+                    if (!res.ok) throw new Error("接口请求失败，请检查 API Key 配置");
+                    data = await res.json();
+                } else {
+                    // 本地/其他环境：直连 Pexels API
+                    let devKey = localStorage.getItem('pexels_dev_key');
+                    if (!devKey) {
+                        // 首次使用，弹出输入框
+                        devKey = prompt('请输入你的 Pexels API Key（仅保存在浏览器本地）：');
+                        if (devKey && devKey.trim()) {
+                            localStorage.setItem('pexels_dev_key', devKey.trim());
+                        } else {
+                            throw new Error('未配置 API Key');
+                        }
+                    }
+                    const pexelsUrl = new URL('https://api.pexels.com/v1/search');
+                    pexelsUrl.searchParams.set('query', query);
+                    pexelsUrl.searchParams.set('orientation', orientation);
+                    pexelsUrl.searchParams.set('size', size);
+                    pexelsUrl.searchParams.set('per_page', perPage);
+                    pexelsUrl.searchParams.set('page', randomPage);
+                    const res = await fetch(pexelsUrl, {
+                        headers: { Authorization: devKey }
+                    });
+                    if (!res.ok) {
+                        // Key 无效，清除缓存并提示重新输入
+                        localStorage.removeItem('pexels_dev_key');
+                        throw new Error('API Key 无效，请刷新后重新输入');
+                    }
+                    data = await res.json();
+                }
+                const photos = data.photos;
+
+                gridBox.innerHTML = "";
+                photos.forEach(photo => {
+                    const item = document.createElement("div");
+                    item.className = "grid-item";
+                    item.style.aspectRatio = currentRatio;
+
+                    const img = document.createElement("img");
+                    img.src = photo.src.medium;
+                    img.alt = photo.alt;
+
+                    item.addEventListener("click", () => {
+                        currentPhotoData = photo;
+                        // 显示加载指示器
+                        loadingSpinner.classList.add("show");
+                        // 初始化占位缩略图，添加呼吸动画暗示加载中
+                        placeholderImg.src = photo.src.small;
+                        placeholderImg.style.opacity = 1;
+                        placeholderImg.classList.remove("fading");
+                        placeholderImg.classList.add("loading");
+                        // 重置大图状态
+                        bigImg.classList.remove("loaded");
+                        bigImg.src = "";
+                        // 加载高清原图
+                        bigImg.src = photo.src.large2x;
+
+                        // 原图加载完成，平滑过渡
+                        bigImg.onload = () => {
+                            // 移除呼吸动画，开始淡入大图
+                            placeholderImg.classList.remove("loading");
+                            placeholderImg.classList.add("fading");
+                            bigImg.classList.add("loaded");
+                            // 隐藏加载指示器
+                            loadingSpinner.classList.remove("show");
+                        };
+
+                        // 加载失败处理
+                        bigImg.onerror = () => {
+                            loadingSpinner.classList.remove("show");
+                            placeholderImg.classList.remove("loading");
+                        };
+
+                        // 填充全部侧边信息
+                        photoId.innerText = photo.id;
+                        photoSize.innerText = `${photo.width} × ${photo.height}`;
+                        // 修复avgColor undefined问题
+                        if (photo.avg_color) {
+                            avgColor.innerHTML = `<span class="color-block" style="background:${photo.avg_color}"></span>${photo.avg_color}`;
+                        } else {
+                            avgColor.innerText = "无";
+                        }
+                        photoAlt.innerText = photo.alt || "无描述";
+                        // 摄影师卡片
+                        const initial = photo.photographer ? photo.photographer.charAt(0).toUpperCase() : "?";
+                        photographerAvatar.textContent = initial;
+                        photographerAvatar.style.background = stringToColor(photo.photographer || "unknown");
+                        photographerName.textContent = photo.photographer;
+                        photographerName.href = photo.photographer_url;
+                        photoPageLink.href = photo.url;
+
+                        previewModal.classList.add("show");
+                    });
+                    item.appendChild(img);
+                    gridBox.appendChild(item);
+                });
+                updateGridRatio();
+            } catch (err) {
+                gridBox.innerHTML = `
+                    <div class="error-card">
+                        <div class="error-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <div class="error-title">加载失败</div>
+                        <div class="error-desc">${err.message || '请检查网络连接或 API Key 配置'}</div>
+                        <button class="error-retry" onclick="loadImages()">重新加载</button>
+                    </div>`;
+                console.error(err);
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // 根据名称生成稳定色值，用于头像背景
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = Math.abs(hash) % 360;
+            return `hsl(${hue}, 50%, 38%)`;
+        }
+
+        // 切换下拉框实时更新现有卡片比例
+        orientationSel.addEventListener("change", updateGridRatio);
+        // 刷新按钮绑定加载事件
+        refreshBtn.addEventListener("click", loadImages);
+        // 预置关键词，每次刷新随机选一个
+        const presetKeywords = [
+            "landscape", "city", "ocean", "mountain", "sunset",
+            "forest", "flower", "animal", "architecture", "night",
+            "travel", "nature", "portrait", "abstract", "food"
+        ];
+        queryInput.value = presetKeywords[Math.floor(Math.random() * presetKeywords.length)];
+
+        // 页面初始化加载
+        loadImages();
+    </script>
+</body>
+</html>

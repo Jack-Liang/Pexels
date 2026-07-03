@@ -1,0 +1,10 @@
+# 云函数运行时
+node_modules/
+.wrangler/
+
+# 本地开发时的密钥 (不要提交)
+.dev.vars
+.dev.vars.example
+
+# 工作区相关
+.workbuddy/
