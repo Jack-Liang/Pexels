@@ -1,7 +1,6 @@
 # Pexels 画廊 — Cloudflare Worker 配置
 # 使用 README 中的一键部署按钮，或手动通过 Cloudflare Dashboard 部署
 # 部署后在 Settings → Variables and Secrets 中添加 Secret：PEXELS_API_KEY
-
 name = "pexels-gallery"
 main = "worker.js"
 compatibility_date = "2025-07-03"
