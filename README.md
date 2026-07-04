@@ -13,7 +13,8 @@
 - **完整信息** — 展示分辨率、主色调、摄影师卡片、Pexels 来源链接
 - **多尺寸下载** — Original ~ Tiny 六档，点击直接下载不跳转
 - **一键复制链接** — 每种尺寸的图片直链一键复制，粘贴到 Markdown 文档即可用
-- **随机翻页** — 每次搜索随机抽取不同页码，刷新总有新图
+- **翻页浏览** — 相同关键词点击「刷新图片」逐页加载下一批，直到无更多结果
+- **随机图片 API** — 提供 `GET /api/random` 接口，可直接嵌入 `<img>` 或返回 JSON
 
 ## 技术栈
 
@@ -35,6 +36,64 @@ API Key 只存在于 Cloudflare 环境变量中，前端永不暴露。
 ├── .dev.vars.example      # 本地开发变量模板
 └── README.md
 ```
+
+## 随机图片 API
+
+对外暴露一个 `GET /api/random` 接口，每次请求返回一张随机图片，可直接用于 `<img>` 标签或程序调用。
+
+```
+GET /api/random
+```
+
+### 查询参数
+
+| 参数 | 可选值 | 默认值 | 说明 |
+|------|--------|--------|------|
+| `query` | 任意英文关键词 | 从预置关键词中随机选取 | 搜索主题 |
+| `orientation` | `landscape` / `portrait` / `square` | 不限 | 图片方向 |
+| `size` | `original` / `large2x` / `large` / `medium` / `small` / `portrait` / `landscape` / `tiny` | `large` | 返回的图片分辨率 |
+| `format` | `redirect` / `json` | `redirect` | 返回形式：跳转到图片 或 返回图片信息 |
+
+> 预置关键词：landscape、city、ocean、mountain、sunset、forest、flower、animal、architecture、night、travel、nature、portrait、abstract、food。
+
+### 两种返回形式
+
+**1. `format=redirect`（默认）** — 返回 `302` 重定向到图片直链，并带 `Cache-Control: no-store`，保证每次都是新图。适合直接嵌入或下载：
+
+```html
+<!-- 每次刷新都是随机图 -->
+<img src="/api/random?query=ocean&orientation=landscape">
+```
+
+```bash
+# 跟随重定向下载随机图
+curl -L "https://<你的域名>/api/random?query=nature&size=large2x" -o random.jpg
+```
+
+**2. `format=json`** — 返回图片完整信息：
+
+```bash
+curl "https://<你的域名>/api/random?query=ocean&format=json"
+```
+
+```json
+{
+  "id": 27607186,
+  "width": 6000,
+  "height": 4000,
+  "url": "https://www.pexels.com/photo/...",
+  "photographer": "Diana Rafira",
+  "photographer_url": "https://www.pexels.com/@...",
+  "avg_color": "#2B5C6B",
+  "alt": "Aerial shot of ocean waves...",
+  "image": "https://images.pexels.com/photos/27607186/...",
+  "src": { "original": "...", "large2x": "...", "large": "...", "medium": "...", "small": "...", "portrait": "...", "landscape": "...", "tiny": "..." }
+}
+```
+
+其中 `image` 为按 `size` 参数选中的图片直链，`src` 包含全部可用尺寸。
+
+> 随机性经过安全处理：先读取 `total_results`，仅在有效页范围内随机翻页，避免页码过大导致取不到数据。
 
 ## 部署
 

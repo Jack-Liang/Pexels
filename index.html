@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pexels画廊</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%230ea5e9'/%3E%3Ccircle%20cx='23'%20cy='23'%20r='6'%20fill='%23fff'/%3E%3Cpath%20d='M10%2050l15-17%2010%2012%209-9%2010%2014z'%20fill='%23fff'/%3E%3C/svg%3E">
     <style>
         * {
             margin: 0;
@@ -630,6 +631,10 @@
         // 全局缓存当前打开图片数据
         let currentPhotoData = null;
 
+        // 分页状态：记录上次成功搜索的关键词与页码
+        let lastQuery = null;
+        let currentPage = 0;
+
         // 关闭弹窗 重置图片
         closeModal.addEventListener("click", resetModal);
         previewModal.addEventListener("click", (e) => {
@@ -745,7 +750,8 @@
             const size = sizeSel.value;
             const perPage = parseInt(countSel.value);
             const currentRatio = getCurrentRatio();
-            const randomPage = Math.floor(Math.random() * 30) + 1;
+            // 与上次相同搜索词则翻到下一页，否则视为新搜索回到第一页
+            const page = query === lastQuery ? currentPage + 1 : 1;
 
             try {
                 // 始终通过 Worker 代理请求，API Key 由服务端注入
@@ -754,7 +760,7 @@
                 proxyUrl.searchParams.set("orientation", orientation);
                 proxyUrl.searchParams.set("size", size);
                 proxyUrl.searchParams.set("per_page", perPage);
-                proxyUrl.searchParams.set("page", randomPage);
+                proxyUrl.searchParams.set("page", page);
                 const res = await fetch(proxyUrl);
 
                 if (!res.ok) {
@@ -767,6 +773,24 @@
 
                 const data = await res.json();
                 const photos = data.photos;
+
+                // 未取到图片：区分「翻到尽头」与「关键词无结果」
+                if (!photos || photos.length === 0) {
+                    if (query === lastQuery && page > 1) {
+                        gridBox.innerHTML = `<div class="loading-tip">没有更多图片了，已经是最后一页</div>`;
+                    } else {
+                        gridBox.innerHTML = "";
+                        const tip = document.createElement("div");
+                        tip.className = "loading-tip";
+                        tip.textContent = `未搜索到「${query}」相关图片，请更换关键词`;
+                        gridBox.appendChild(tip);
+                    }
+                    return;
+                }
+
+                // 成功取到图片后再提交分页状态，作为下次翻页依据
+                lastQuery = query;
+                currentPage = page;
 
                 gridBox.innerHTML = "";
                 photos.forEach(photo => {
