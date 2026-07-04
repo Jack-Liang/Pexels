@@ -164,7 +164,7 @@
         }
         .modal.show {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
         }
         /* 统一外框容器，大图+信息栏同框 */
@@ -174,6 +174,8 @@
             gap: 24px;
             max-width: 1400px;
             width: 100%;
+            /* auto 边距在空间充足时垂直居中，内容超高时上边距归零，可从顶部滚动，避免关闭按钮被裁切 */
+            margin: auto;
             background: #1e1e1e;
             border-radius: 16px;
             padding: 24px;
@@ -458,14 +460,71 @@
             margin: 0 8px;
             color: #3a3a3a;
         }
-        /* 移动端适配 */
+        /* 平板适配：弹窗改为纵向堆叠 */
         @media (max-width: 900px) {
+            .modal {
+                padding: 16px;
+            }
             .modal-card {
                 flex-direction: column;
+                gap: 16px;
+                padding: 48px 16px 16px;
+            }
+            .close-btn {
+                top: 10px;
+                right: 10px;
             }
             .modal-info {
                 width: 100%;
                 max-height: unset;
+                overflow-y: visible;
+                padding-right: 0;
+            }
+            .modal-placeholder,
+            .modal-img {
+                max-height: 60vh;
+            }
+        }
+        /* 手机适配：收窄内边距、控件重排、缩略图两列 */
+        @media (max-width: 600px) {
+            body {
+                padding: 20px 12px;
+            }
+            h1 {
+                font-size: 18px;
+                margin-bottom: 12px;
+            }
+            .config-panel {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+                padding: 16px;
+                margin-bottom: 20px;
+            }
+            /* 关键词输入独占整行，方向/尺寸、数量/按钮各成一行 */
+            .config-panel .form-item:first-child {
+                grid-column: 1 / -1;
+            }
+            .form-item label {
+                text-align: left;
+                margin-bottom: 6px;
+                font-size: 14px;
+            }
+            #refreshBtn {
+                align-self: end;
+                width: 100%;
+            }
+            .grid-wrap {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+        }
+        /* 超窄屏：控件与缩略图均单列 */
+        @media (max-width: 380px) {
+            .config-panel {
+                grid-template-columns: 1fr;
+            }
+            .grid-wrap {
+                grid-template-columns: 1fr;
             }
         }
     </style>
