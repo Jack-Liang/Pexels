@@ -51,7 +51,7 @@ GET /api/random
 |------|--------|--------|------|
 | `query` | 任意英文关键词 | 从预置关键词中随机选取 | 搜索主题 |
 | `orientation` | `landscape` / `portrait` / `square` | 不限 | 图片方向 |
-| `size` | `original` / `large2x` / `large` / `medium` / `small` / `portrait` / `landscape` / `tiny` | `large` | 返回的图片分辨率 |
+| `size` | `original` / `large2x` / `large` / `medium` / `small` / `portrait` / `landscape` / `tiny` | `large` | 返回的图片分辨率；传入无效值时回退为 `large` |
 | `format` | `redirect` / `json` | `redirect` | 返回形式：跳转到图片 或 返回图片信息 |
 
 > 预置关键词：landscape、city、ocean、mountain、sunset、forest、flower、animal、architecture、night、travel、nature、portrait、abstract、food。
