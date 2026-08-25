@@ -7,6 +7,7 @@
     <meta property="og:title" content="Pexels 画廊">
     <meta property="og:description" content="搜索、预览并下载 Pexels 高质量免费图片，支持多尺寸直链一键复制。">
     <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://images.pexels.com" crossorigin>
     <title>Pexels画廊</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%230ea5e9'/%3E%3Ccircle%20cx='23'%20cy='23'%20r='6'%20fill='%23fff'/%3E%3Cpath%20d='M10%2050l15-17%2010%2012%209-9%2010%2014z'%20fill='%23fff'/%3E%3C/svg%3E">
     <style>
@@ -209,16 +210,23 @@
         }
         .modal-img-box {
             flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             position: relative;
-        }
-        .modal-placeholder {
-            position: absolute;
+            /* 由 JS 按图片真实宽高比设定，打开瞬间容器尺寸即确定，不再跳动 */
+            aspect-ratio: var(--photo-ratio, 16 / 9);
             max-width: 100%;
             max-height: 85vh;
+        }
+        /* 占位图与大图完全重叠，保证交叉淡化时严格对齐 */
+        .modal-placeholder,
+        .modal-img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             border-radius: 8px;
+        }
+        .modal-placeholder {
             z-index: 1;
             transition: opacity 0.5s ease, filter 0.5s ease;
         }
@@ -230,15 +238,11 @@
             filter: blur(8px);
         }
         .modal-img {
-            position: relative;
-            max-width: 100%;
-            max-height: 85vh;
-            border-radius: 8px;
             z-index: 2;
             opacity: 0;
-            transform: scale(0.85);
-            transition: opacity 0.9s cubic-bezier(0.25, 0.1, 0.25, 1),
-                        transform 0.9s cubic-bezier(0.25, 0.1, 0.25, 1);
+            transform: scale(1.02);
+            /* 与占位图淡出时长一致，两图层同步交接 */
+            transition: opacity 0.5s ease, transform 0.5s ease;
         }
         .modal-img.loaded {
             opacity: 1;
@@ -484,8 +488,7 @@
                 overflow-y: visible;
                 padding-right: 0;
             }
-            .modal-placeholder,
-            .modal-img {
+            .modal-img-box {
                 max-height: 60vh;
             }
         }
@@ -552,11 +555,11 @@
                 </select>
             </div>
             <div class="form-item">
-                <label>缩略图尺寸</label>
+                <label>缩略图清晰度</label>
                 <select id="sizeSel">
-                    <option value="small">small 小图</option>
-                    <option value="medium" selected>medium 中等</option>
-                    <option value="large">large 大图</option>
+                    <option value="small">省流量</option>
+                    <option value="medium" selected>均衡</option>
+                    <option value="large">高清</option>
                 </select>
             </div>
             <div class="form-item">
@@ -675,6 +678,7 @@
         const placeholderImg = document.getElementById("placeholderImg");
         const closeModal = document.getElementById("closeModal");
         const loadingSpinner = document.getElementById("loadingSpinner");
+        const imgBox = document.querySelector(".modal-img-box");
         // 信息面板DOM
         const photoId = document.getElementById("photoId");
         const photoSize = document.getElementById("photoSize");
@@ -715,7 +719,6 @@
             bigImg.classList.remove("loaded");
             bigImg.src = "";
             placeholderImg.src = "";
-            placeholderImg.style.opacity = 1;
             placeholderImg.classList.remove("loading", "fading");
             loadingSpinner.classList.remove("show");
         }
@@ -802,6 +805,27 @@
             return "16 / 9";
         }
 
+        // 当前网格列数（与 CSS 断点保持一致）
+        function gridCols() {
+            const w = window.innerWidth;
+            if (w <= 380) return 1;
+            if (w <= 600) return 2;
+            return 3;
+        }
+
+        // 按格子实际显示尺寸向 CDN 请求精确裁剪的缩略图，像素零浪费；
+        // sizeSel 作为清晰度档位（0.7x / 1x / 1.4x）
+        function thumbUrl(photo) {
+            const cols = gridCols();
+            const gap = cols === 3 ? 16 : 10;
+            const cellW = (gridBox.clientWidth - gap * (cols - 1)) / cols || 380;
+            const scale = { small: 0.7, medium: 1, large: 1.4 }[sizeSel.value] || 1;
+            const w = Math.round(cellW * (window.devicePixelRatio || 1) * scale);
+            const [rw, rh] = getCurrentRatio().split("/").map(Number);
+            const h = Math.round(w * rh / rw);
+            return `${photo.src.original}?auto=compress&cs=tinysrgb&fit=crop&w=${w}&h=${h}`;
+        }
+
         // 批量更新所有卡片比例
         function updateGridRatio() {
             const ratio = getCurrentRatio();
@@ -816,7 +840,6 @@
 
             const query = queryInput.value.trim() || "landscape";
             const orientation = orientationSel.value;
-            const size = sizeSel.value;
             const perPage = parseInt(countSel.value);
             const currentRatio = getCurrentRatio();
             // 搜索条件（关键词+方向+数量）与上次相同则翻到下一页，否则视为新搜索回到第一页
@@ -871,7 +894,7 @@
                     item.style.aspectRatio = currentRatio;
 
                     const img = document.createElement("img");
-                    img.src = photo.src[size] || photo.src.medium;
+                    img.src = thumbUrl(photo);
                     img.alt = photo.alt || "Pexels 图片";
                     img.loading = "lazy";
                     img.decoding = "async";
@@ -883,15 +906,14 @@
                         const token = ++previewToken;
                         // 显示加载指示器
                         loadingSpinner.classList.add("show");
-                        // 初始化占位缩略图，添加呼吸动画暗示加载中
-                        placeholderImg.src = photo.src.small;
-                        placeholderImg.style.opacity = 1;
+                        // 容器按图片真实宽高比提前定型，大图加载后布局不再跳动
+                        imgBox.style.setProperty("--photo-ratio", `${photo.width} / ${photo.height}`);
+                        // 占位图直接复用网格里那张已缓存的缩略图，零延迟显示
+                        placeholderImg.src = img.src;
                         placeholderImg.classList.remove("fading");
                         placeholderImg.classList.add("loading");
-                        // 重置大图状态
+                        // 重置大图状态并加载高清原图（不清空 src，避免 broken image 闪烁）
                         bigImg.classList.remove("loaded");
-                        bigImg.src = "";
-                        // 加载高清原图
                         bigImg.src = photo.src.large2x;
 
                         // 原图加载完成，平滑过渡（令牌失效说明用户已点开另一张）
@@ -968,12 +990,10 @@
 
         // 切换下拉框实时更新现有卡片比例
         orientationSel.addEventListener("change", updateGridRatio);
-        // 切换缩略图尺寸实时替换已有卡片图片，无需重新请求
+        // 切换清晰度档位实时替换已有卡片图片，无需重新请求
         sizeSel.addEventListener("change", () => {
-            const size = sizeSel.value;
             document.querySelectorAll(".grid-item img").forEach(el => {
-                const p = el._photo;
-                if (p) el.src = p.src[size] || p.src.medium;
+                if (el._photo) el.src = thumbUrl(el._photo);
             });
         });
         // 刷新按钮绑定加载事件
