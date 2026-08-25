@@ -96,6 +96,11 @@
         .grid-item:hover {
             transform: scale(1.03);
         }
+        /* 键盘聚焦时给出明显焦点框 */
+        .grid-item:focus-visible {
+            outline: 2px solid #0ea5e9;
+            outline-offset: 2px;
+        }
         .grid-item img {
             width: 100%;
             height: 100%;
@@ -171,6 +176,10 @@
             display: flex;
             align-items: flex-start;
             justify-content: center;
+        }
+        /* 程序性聚焦时不显示焦点框 */
+        .modal:focus {
+            outline: none;
         }
         /* 统一外框容器，大图+信息栏同框 */
         .modal-card {
@@ -557,8 +566,8 @@
             <div class="form-item">
                 <label>缩略图清晰度</label>
                 <select id="sizeSel">
-                    <option value="small">省流量</option>
-                    <option value="medium" selected>均衡</option>
+                    <option value="small" selected>省流量</option>
+                    <option value="medium">均衡</option>
                     <option value="large">高清</option>
                 </select>
             </div>
@@ -584,7 +593,7 @@
     </div>
 
     <!-- 大图预览弹窗 -->
-    <div class="modal" id="previewModal">
+    <div class="modal" id="previewModal" role="dialog" aria-modal="true" aria-label="图片预览" tabindex="-1">
         <div class="modal-card">
             <span class="close-btn" id="closeModal">×</span>
             <div class="modal-img-box">
@@ -699,6 +708,8 @@
         let currentPhotoData = null;
         // 预览竞态令牌：快速连点时使旧图的 onload/onerror 回调失效
         let previewToken = 0;
+        // 记录打开弹窗的卡片，关闭时焦点归还
+        let modalTrigger = null;
 
         // 分页状态：记录上次成功搜索的条件（关键词+方向+数量）与页码
         let lastSearchKey = null;
@@ -709,9 +720,14 @@
         previewModal.addEventListener("click", (e) => {
             if (e.target === previewModal) resetModal();
         });
-        // Esc 键关闭弹窗
+        // Esc 键关闭弹窗；焦点在弹窗容器上时空格也可关闭（不影响内部按钮的空格触发）
         document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && previewModal.classList.contains("show")) resetModal();
+            if (!previewModal.classList.contains("show")) return;
+            if (e.key === "Escape") resetModal();
+            if (e.key === " " && e.target === previewModal) {
+                e.preventDefault();
+                resetModal();
+            }
         });
         function resetModal() {
             previewModal.classList.remove("show");
@@ -721,6 +737,9 @@
             placeholderImg.src = "";
             placeholderImg.classList.remove("loading", "fading");
             loadingSpinner.classList.remove("show");
+            // 焦点归还到触发弹窗的卡片（卡片可能已因重新搜索被移除，需先确认还在文档里）
+            if (modalTrigger && modalTrigger.isConnected) modalTrigger.focus();
+            modalTrigger = null;
         }
 
         // 多尺寸下载统一处理
@@ -735,7 +754,22 @@
                 btn.textContent = "下载中...";
                 try {
                     const response = await fetch(url);
-                    const blob = await response.blob();
+                    if (!response.ok || !response.body) throw new Error("download failed");
+                    // 流式读取并实时更新进度：有 Content-Length 显示百分比，否则显示已下载体积
+                    const total = parseInt(response.headers.get("Content-Length")) || 0;
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    let received = 0;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        received += value.length;
+                        btn.textContent = total
+                            ? `下载中 ${Math.round(received / total * 100)}%`
+                            : `下载中 ${(received / 1048576).toFixed(1)}MB`;
+                    }
+                    const blob = new Blob(chunks);
                     const blobUrl = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = blobUrl;
@@ -892,6 +926,10 @@
                     const item = document.createElement("div");
                     item.className = "grid-item";
                     item.style.aspectRatio = currentRatio;
+                    // 键盘可达：可聚焦、语义为按钮，Enter/空格打开预览
+                    item.tabIndex = 0;
+                    item.setAttribute("role", "button");
+                    item.setAttribute("aria-label", `查看大图：${photo.alt || "Pexels 图片"}`);
 
                     const img = document.createElement("img");
                     img.src = thumbUrl(photo);
@@ -901,9 +939,14 @@
                     // 保留图片数据，切换缩略图尺寸时可直接换 src 无需重新请求
                     img._photo = photo;
 
-                    item.addEventListener("click", () => {
+                    const openPreview = () => {
                         currentPhotoData = photo;
                         const token = ++previewToken;
+                        modalTrigger = item;
+                        // 先展示弹窗，才能测到图片区的真实显示宽度
+                        previewModal.classList.add("show");
+                        // 焦点移入弹窗：避免中文输入法/搜索框焦点吞掉第一次 Esc
+                        previewModal.focus();
                         // 显示加载指示器
                         loadingSpinner.classList.add("show");
                         // 容器按图片真实宽高比提前定型，大图加载后布局不再跳动
@@ -912,9 +955,11 @@
                         placeholderImg.src = img.src;
                         placeholderImg.classList.remove("fading");
                         placeholderImg.classList.add("loading");
-                        // 重置大图状态并加载高清原图（不清空 src，避免 broken image 闪烁）
+                        // 重置大图状态（不清空 src，避免 broken image 闪烁）
                         bigImg.classList.remove("loaded");
-                        bigImg.src = photo.src.large2x;
+                        // 大图自适应：按实际显示宽度 × 屏幕像素比向 CDN 请求压缩图
+                        const targetW = Math.min(photo.width, Math.max(Math.round(imgBox.clientWidth * (window.devicePixelRatio || 1)), 640));
+                        bigImg.src = `${photo.src.original}?auto=compress&cs=tinysrgb&w=${targetW}`;
 
                         // 原图加载完成，平滑过渡（令牌失效说明用户已点开另一张）
                         bigImg.onload = () => {
@@ -951,8 +996,14 @@
                         photographerName.textContent = photo.photographer;
                         photographerName.href = photo.photographer_url;
                         photoPageLink.href = photo.url;
+                    };
 
-                        previewModal.classList.add("show");
+                    item.addEventListener("click", openPreview);
+                    item.addEventListener("keydown", (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openPreview();
+                        }
                     });
                     item.appendChild(img);
                     gridBox.appendChild(item);
@@ -998,6 +1049,10 @@
         });
         // 刷新按钮绑定加载事件
         refreshBtn.addEventListener("click", loadImages);
+        // 搜索框按 Enter 直接刷新（isComposing 防止中文输入法选词时误触发）
+        queryInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.isComposing) loadImages();
+        });
         // 预置关键词由 Worker 注入（worker.js 的 PRESET_KEYWORDS 为唯一数据源），兜底值保证直接打开 HTML 也能用
         const presetKeywords = /*__PRESET_KEYWORDS__*/["landscape"];
         queryInput.value = presetKeywords[Math.floor(Math.random() * presetKeywords.length)];

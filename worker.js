@@ -22,11 +22,22 @@
 
 import html from './index.html';
 
-// 预置关键词：当 /api/random 未指定 query 时随机选取一个
+// 预置关键词：当 /api/random 未指定 query 时随机选取一个（页面初始化也共用这份列表，由 Worker 注入 HTML）
 const PRESET_KEYWORDS = [
-	'landscape', 'city', 'ocean', 'mountain', 'sunset',
-	'forest', 'flower', 'animal', 'architecture', 'night',
-	'travel', 'nature', 'portrait', 'abstract', 'food',
+	// 自然风光
+	'landscape', 'ocean', 'mountain', 'sunset', 'sunrise', 'forest',
+	'flower', 'beach', 'desert', 'waterfall', 'lake', 'river',
+	'snow', 'island', 'valley', 'canyon', 'aurora', 'meadow',
+	// 城市与建筑
+	'city', 'architecture', 'night', 'street', 'skyline', 'bridge',
+	'neon', 'lighthouse', 'old town', 'skyscraper',
+	// 动物
+	'animal', 'wildlife', 'bird', 'cat', 'dog', 'underwater',
+	// 氛围与风格
+	'abstract', 'minimal', 'vintage', 'macro', 'texture', 'aerial',
+	'fog', 'rain', 'golden hour', 'silhouette',
+	// 生活与旅行
+	'travel', 'nature', 'portrait', 'food', 'coffee', 'books',
 ];
 
 // Pexels 搜索单页最大数量
