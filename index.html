@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="基于 Pexels API 的在线图片画廊，支持关键词搜索、大图预览、多尺寸下载及一键复制图片直链。">
+    <meta property="og:title" content="Pexels 画廊">
+    <meta property="og:description" content="搜索、预览并下载 Pexels 高质量免费图片，支持多尺寸直链一键复制。">
+    <meta property="og:type" content="website">
     <title>Pexels画廊</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%230ea5e9'/%3E%3Ccircle%20cx='23'%20cy='23'%20r='6'%20fill='%23fff'/%3E%3Cpath%20d='M10%2050l15-17%2010%2012%209-9%2010%2014z'%20fill='%23fff'/%3E%3C/svg%3E">
     <style>
@@ -701,6 +705,10 @@
         previewModal.addEventListener("click", (e) => {
             if (e.target === previewModal) resetModal();
         });
+        // Esc 键关闭弹窗
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && previewModal.classList.contains("show")) resetModal();
+        });
         function resetModal() {
             previewModal.classList.remove("show");
             currentPhotoData = null;
@@ -933,9 +941,11 @@
                             </svg>
                         </div>
                         <div class="error-title">加载失败</div>
-                        <div class="error-desc">${err.message || '请检查网络连接或 API Key 配置'}</div>
+                        <div class="error-desc"></div>
                         <button class="error-retry" onclick="loadImages()">重新加载</button>
                     </div>`;
+                // 错误信息用 textContent 插入，避免 innerHTML 拼接带来的 XSS 隐患
+                gridBox.querySelector(".error-desc").textContent = err.message || '请检查网络连接或 API Key 配置';
                 console.error(err);
             } finally {
                 refreshBtn.disabled = false;
@@ -964,12 +974,8 @@
         });
         // 刷新按钮绑定加载事件
         refreshBtn.addEventListener("click", loadImages);
-        // 预置关键词，每次刷新随机选一个
-        const presetKeywords = [
-            "landscape", "city", "ocean", "mountain", "sunset",
-            "forest", "flower", "animal", "architecture", "night",
-            "travel", "nature", "portrait", "abstract", "food"
-        ];
+        // 预置关键词由 Worker 注入（worker.js 的 PRESET_KEYWORDS 为唯一数据源），兜底值保证直接打开 HTML 也能用
+        const presetKeywords = /*__PRESET_KEYWORDS__*/["landscape"];
         queryInput.value = presetKeywords[Math.floor(Math.random() * presetKeywords.length)];
 
         // 页面初始化加载

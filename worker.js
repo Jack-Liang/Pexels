@@ -71,15 +71,27 @@ export default {
 				});
 			}
 
-			// 把前端传来的 query 参数透传到 Pexels API
-			const pexelsUrl = new URL('https://api.pexels.com/v1/search');
-			for (const [key, value] of url.searchParams) {
-				pexelsUrl.searchParams.set(key, value);
+			// Origin 校验：浏览器跨站调用直接拒绝（curl/脚本无 Origin 头，靠下方参数钳制兜底）
+			const origin = request.headers.get('Origin');
+			if (origin && new URL(origin).host !== url.host) {
+				return jsonResponse({ error: 'Forbidden: cross-origin access not allowed' }, 403);
 			}
 
-			const pexelsRes = await fetch(pexelsUrl, {
-				headers: { Authorization: env.PEXELS_API_KEY },
-			});
+			// 参数白名单：只放行前端实际使用的字段，其余一律丢弃
+			const query = (url.searchParams.get('query') || '').trim().slice(0, 100);
+			if (!query) {
+				return jsonResponse({ error: '缺少 query 参数' }, 400);
+			}
+			const orientation = url.searchParams.get('orientation') || '';
+			if (orientation && !['landscape', 'portrait', 'square'].includes(orientation)) {
+				return jsonResponse({ error: 'orientation 仅支持 landscape | portrait | square' }, 400);
+			}
+			// 数值钳制：per_page ≤ 80，page 限制在实际可翻页范围内，防止恶意放大配额消耗
+			const perPage = Math.min(Math.max(parseInt(url.searchParams.get('per_page'), 10) || 15, 1), MAX_PER_PAGE);
+			const maxPage = Math.ceil(MAX_SEARCHABLE_RESULTS / MAX_PER_PAGE);
+			const page = Math.min(Math.max(parseInt(url.searchParams.get('page'), 10) || 1, 1), maxPage);
+
+			const pexelsRes = await pexelsSearch(env, { query, orientation, page, perPage });
 
 			// 透传响应（跨域头确保前端能读取）
 			const res = new Response(pexelsRes.body, pexelsRes);
@@ -163,7 +175,9 @@ export default {
 		if (path !== '/') {
 			return new Response('Not Found', { status: 404 });
 		}
-		return new Response(html, {
+		// 把预置关键词注入页面，前后端共用 PRESET_KEYWORDS 这一份数据源
+		const page = html.replace('/*__PRESET_KEYWORDS__*/["landscape"]', JSON.stringify(PRESET_KEYWORDS));
+		return new Response(page, {
 			headers: { 'Content-Type': 'text/html; charset=utf-8' },
 		});
 	},
