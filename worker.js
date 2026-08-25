@@ -48,10 +48,10 @@ function pickRandom(arr) {
 	return arr[Math.floor(Math.random() * arr.length)];
 }
 
-async function pexelsSearch(env, { query, orientation, page }) {
+async function pexelsSearch(env, { query, orientation, page, perPage = MAX_PER_PAGE }) {
 	const api = new URL('https://api.pexels.com/v1/search');
 	api.searchParams.set('query', query);
-	api.searchParams.set('per_page', String(MAX_PER_PAGE));
+	api.searchParams.set('per_page', String(perPage));
 	api.searchParams.set('page', String(page));
 	if (orientation) api.searchParams.set('orientation', orientation);
 	return fetch(api, { headers: { Authorization: env.PEXELS_API_KEY } });
@@ -154,7 +154,15 @@ export default {
 			});
 		}
 
-		// ---- 静态 HTML 页面 ----
+		// ---- 未匹配的 API 路径返回 404 ----
+		if (path.startsWith('/api/')) {
+			return jsonResponse({ error: `Not Found: ${path}` }, 404);
+		}
+
+		// ---- 静态 HTML 页面（仅根路径） ----
+		if (path !== '/') {
+			return new Response('Not Found', { status: 404 });
+		}
 		return new Response(html, {
 			headers: { 'Content-Type': 'text/html; charset=utf-8' },
 		});

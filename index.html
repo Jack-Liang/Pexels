@@ -689,6 +689,8 @@
 
         // 全局缓存当前打开图片数据
         let currentPhotoData = null;
+        // 预览竞态令牌：快速连点时使旧图的 onload/onerror 回调失效
+        let previewToken = 0;
 
         // 分页状态：记录上次成功搜索的关键词与页码
         let lastQuery = null;
@@ -817,7 +819,6 @@
                 const proxyUrl = new URL("/api/pexels", window.location.origin);
                 proxyUrl.searchParams.set("query", query);
                 proxyUrl.searchParams.set("orientation", orientation);
-                proxyUrl.searchParams.set("size", size);
                 proxyUrl.searchParams.set("per_page", perPage);
                 proxyUrl.searchParams.set("page", page);
                 const res = await fetch(proxyUrl);
@@ -858,11 +859,16 @@
                     item.style.aspectRatio = currentRatio;
 
                     const img = document.createElement("img");
-                    img.src = photo.src.medium;
-                    img.alt = photo.alt;
+                    img.src = photo.src[size] || photo.src.medium;
+                    img.alt = photo.alt || "Pexels 图片";
+                    img.loading = "lazy";
+                    img.decoding = "async";
+                    // 保留图片数据，切换缩略图尺寸时可直接换 src 无需重新请求
+                    img._photo = photo;
 
                     item.addEventListener("click", () => {
                         currentPhotoData = photo;
+                        const token = ++previewToken;
                         // 显示加载指示器
                         loadingSpinner.classList.add("show");
                         // 初始化占位缩略图，添加呼吸动画暗示加载中
@@ -876,8 +882,9 @@
                         // 加载高清原图
                         bigImg.src = photo.src.large2x;
 
-                        // 原图加载完成，平滑过渡
+                        // 原图加载完成，平滑过渡（令牌失效说明用户已点开另一张）
                         bigImg.onload = () => {
+                            if (token !== previewToken) return;
                             // 移除呼吸动画，开始淡入大图
                             placeholderImg.classList.remove("loading");
                             placeholderImg.classList.add("fading");
@@ -888,6 +895,7 @@
 
                         // 加载失败处理
                         bigImg.onerror = () => {
+                            if (token !== previewToken) return;
                             loadingSpinner.classList.remove("show");
                             placeholderImg.classList.remove("loading");
                         };
@@ -946,6 +954,14 @@
 
         // 切换下拉框实时更新现有卡片比例
         orientationSel.addEventListener("change", updateGridRatio);
+        // 切换缩略图尺寸实时替换已有卡片图片，无需重新请求
+        sizeSel.addEventListener("change", () => {
+            const size = sizeSel.value;
+            document.querySelectorAll(".grid-item img").forEach(el => {
+                const p = el._photo;
+                if (p) el.src = p.src[size] || p.src.medium;
+            });
+        });
         // 刷新按钮绑定加载事件
         refreshBtn.addEventListener("click", loadImages);
         // 预置关键词，每次刷新随机选一个
