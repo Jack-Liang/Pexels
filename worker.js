@@ -44,6 +44,8 @@ const PRESET_KEYWORDS = [
 const MAX_PER_PAGE = 80;
 // Pexels 搜索结果的实际可翻页上限，超出会取不到数据，用于收敛随机页范围
 const MAX_SEARCHABLE_RESULTS = 8000;
+// 边缘缓存 TTL：相同上游请求 5 分钟内直接命中 Cloudflare 缓存，零配额消耗
+const CACHE_TTL = 300;
 
 function jsonResponse(data, status = 200) {
 	return new Response(JSON.stringify(data), {
@@ -59,13 +61,27 @@ function pickRandom(arr) {
 	return arr[Math.floor(Math.random() * arr.length)];
 }
 
-async function pexelsSearch(env, { query, orientation, page, perPage = MAX_PER_PAGE }) {
+async function pexelsSearch(env, ctx, { query, orientation, page, perPage = MAX_PER_PAGE }) {
 	const api = new URL('https://api.pexels.com/v1/search');
 	api.searchParams.set('query', query);
 	api.searchParams.set('per_page', String(perPage));
 	api.searchParams.set('page', String(page));
 	if (orientation) api.searchParams.set('orientation', orientation);
-	return fetch(api, { headers: { Authorization: env.PEXELS_API_KEY } });
+
+	// 先查 Cloudflare 边缘缓存，命中则不发上游请求
+	const cacheKey = new Request(api.toString());
+	const cached = await caches.default.match(cacheKey);
+	if (cached) return cached;
+
+	const upstream = await fetch(api, { headers: { Authorization: env.PEXELS_API_KEY } });
+	// 错误响应（429/5xx 等）不缓存，避免污染
+	if (!upstream.ok) return upstream;
+
+	// 重建响应以附加 Cache-Control，克隆一份异步写入缓存
+	const res = new Response(upstream.body, upstream);
+	res.headers.set('Cache-Control', `public, max-age=${CACHE_TTL}`);
+	ctx.waitUntil(caches.default.put(cacheKey, res.clone()));
+	return res;
 }
 
 export default {
@@ -102,7 +118,7 @@ export default {
 			const maxPage = Math.ceil(MAX_SEARCHABLE_RESULTS / MAX_PER_PAGE);
 			const page = Math.min(Math.max(parseInt(url.searchParams.get('page'), 10) || 1, 1), maxPage);
 
-			const pexelsRes = await pexelsSearch(env, { query, orientation, page, perPage });
+			const pexelsRes = await pexelsSearch(env, ctx, { query, orientation, page, perPage });
 
 			// 上游限流时返回友好提示，而不是原样透传
 			if (pexelsRes.status === 429) {
@@ -134,7 +150,7 @@ export default {
 			}
 
 			// 第一次请求取 total_results，据此计算安全的随机页范围（避免翻过头取不到数据）
-			const firstRes = await pexelsSearch(env, { query, orientation, page: 1 });
+			const firstRes = await pexelsSearch(env, ctx, { query, orientation, page: 1 });
 			if (firstRes.status === 429) {
 				return jsonResponse({ error: '请求太频繁，请稍后再试' }, 429);
 			}
@@ -153,7 +169,7 @@ export default {
 
 			let photos = firstData.photos;
 			if (randomPage !== 1) {
-				const pageRes = await pexelsSearch(env, { query, orientation, page: randomPage });
+				const pageRes = await pexelsSearch(env, ctx, { query, orientation, page: randomPage });
 				if (pageRes.ok) {
 					const pageData = await pageRes.json();
 					// 极端情况下高页码可能返回空，回退到第一页结果
