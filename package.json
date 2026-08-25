@@ -1,0 +1,10 @@
+{
+  "name": "pexels-gallery",
+  "private": true,
+  "version": "1.0.0",
+  "description": "基于 Pexels API 的在线图片画廊，部署在 Cloudflare Workers",
+  "scripts": {
+    "dev": "npx -y wrangler dev",
+    "deploy": "npx -y wrangler deploy"
+  }
+}

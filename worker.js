@@ -93,6 +93,11 @@ export default {
 
 			const pexelsRes = await pexelsSearch(env, { query, orientation, page, perPage });
 
+			// 上游限流时返回友好提示，而不是原样透传
+			if (pexelsRes.status === 429) {
+				return jsonResponse({ error: 'Pexels 请求频率超限，请稍后再试' }, 429);
+			}
+
 			// 透传响应（跨域头确保前端能读取）
 			const res = new Response(pexelsRes.body, pexelsRes);
 			res.headers.set('Access-Control-Allow-Origin', '*');
@@ -111,8 +116,17 @@ export default {
 			const sizeKey = params.get('size') || 'large';
 			const format = (params.get('format') || 'redirect').toLowerCase();
 
+			// size 参数校验：非法值直接 400，不再静默回退到 large
+			const VALID_SIZES = ['original', 'large2x', 'large', 'medium', 'small', 'portrait', 'landscape', 'tiny'];
+			if (!VALID_SIZES.includes(sizeKey)) {
+				return jsonResponse({ error: `size 仅支持 ${VALID_SIZES.join(' | ')}` }, 400);
+			}
+
 			// 第一次请求取 total_results，据此计算安全的随机页范围（避免翻过头取不到数据）
 			const firstRes = await pexelsSearch(env, { query, orientation, page: 1 });
+			if (firstRes.status === 429) {
+				return jsonResponse({ error: '请求太频繁，请稍后再试' }, 429);
+			}
 			if (!firstRes.ok) {
 				return jsonResponse({ error: '上游 Pexels 请求失败，请稍后重试' }, 502);
 			}

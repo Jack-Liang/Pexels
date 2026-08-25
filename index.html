@@ -696,8 +696,8 @@
         // 预览竞态令牌：快速连点时使旧图的 onload/onerror 回调失效
         let previewToken = 0;
 
-        // 分页状态：记录上次成功搜索的关键词与页码
-        let lastQuery = null;
+        // 分页状态：记录上次成功搜索的条件（关键词+方向+数量）与页码
+        let lastSearchKey = null;
         let currentPage = 0;
 
         // 关闭弹窗 重置图片
@@ -819,8 +819,9 @@
             const size = sizeSel.value;
             const perPage = parseInt(countSel.value);
             const currentRatio = getCurrentRatio();
-            // 与上次相同搜索词则翻到下一页，否则视为新搜索回到第一页
-            const page = query === lastQuery ? currentPage + 1 : 1;
+            // 搜索条件（关键词+方向+数量）与上次相同则翻到下一页，否则视为新搜索回到第一页
+            const searchKey = `${query}|${orientation}|${perPage}`;
+            const page = searchKey === lastSearchKey ? currentPage + 1 : 1;
 
             try {
                 // 始终通过 Worker 代理请求，API Key 由服务端注入
@@ -832,6 +833,9 @@
                 const res = await fetch(proxyUrl);
 
                 if (!res.ok) {
+                    if (res.status === 429) {
+                        throw new Error('请求太频繁，请稍等片刻再试');
+                    }
                     const errData = await res.json().catch(() => null);
                     if (errData?.error?.includes('PEXELS_API_KEY')) {
                         throw new Error('服务端未配置 API Key，请在 Cloudflare Dashboard → Workers → Settings → Variables and Secrets 中添加 PEXELS_API_KEY');
@@ -844,7 +848,7 @@
 
                 // 未取到图片：区分「翻到尽头」与「关键词无结果」
                 if (!photos || photos.length === 0) {
-                    if (query === lastQuery && page > 1) {
+                    if (searchKey === lastSearchKey && page > 1) {
                         gridBox.innerHTML = `<div class="loading-tip">没有更多图片了，已经是最后一页</div>`;
                     } else {
                         gridBox.innerHTML = "";
@@ -857,7 +861,7 @@
                 }
 
                 // 成功取到图片后再提交分页状态，作为下次翻页依据
-                lastQuery = query;
+                lastSearchKey = searchKey;
                 currentPage = page;
 
                 gridBox.innerHTML = "";
